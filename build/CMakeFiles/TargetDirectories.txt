@@ -1,0 +1,3 @@
+/home/mostlydaniel/Code/olang/build/CMakeFiles/olang_compiler.dir
+/home/mostlydaniel/Code/olang/build/CMakeFiles/edit_cache.dir
+/home/mostlydaniel/Code/olang/build/CMakeFiles/rebuild_cache.dir

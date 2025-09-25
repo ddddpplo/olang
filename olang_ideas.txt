@@ -1,0 +1,35 @@
+'ref' keyword used as such:
+
+ref Object object = new Object(foo);
+
+that object was just allocated on the heap and is now treated similarly
+to how C# treats refrences to objects. Its member variables and methods
+can still be accessed directly with the '.' operator, no '->' operator.
+
+object = new Object(bar);
+
+When it's redefined, its old value will check if it has any references to it
+left, and if not, it will be deleted.
+
+
+Parse tree structure:
+
+int
+    foo
+=
+    foo
+    5
+if
+    <
+        foo
+        6
+    do // not a keyword but this just represents a scope
+        print
+            foo
+        exit
+            0
+    else
+        print
+            "foo is not less than 6"
+        exit
+            1 // generic error exit code

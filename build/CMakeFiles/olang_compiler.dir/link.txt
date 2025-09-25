@@ -1,0 +1,1 @@
+/usr/bin/c++ CMakeFiles/olang_compiler.dir/main.cpp.o -o olang_compiler 
