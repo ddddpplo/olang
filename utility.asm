@@ -2,58 +2,63 @@
 SYS_READ    equ 0
 SYS_WRITE   equ 1
 SYS_EXIT    equ 60
-STDIN       equ 0
-STDOUT      equ 1
+STD_IN       equ 0
+STD_OUT      equ 1
+
+section .data
+	endl db 10,0
 
 section .bss
     digitSpace resb 100
     digitSpacePos resb 8
-    digitChar resb 1
 
 section .text
 
-%macro op_add_rax 2
-    mov rax, %1
-    add rax, %2
-%endmacro
+_op_add:
+	; adds rdi + rsi, returns in rax
+    mov rax, rdi
+    add rax, rsi
+	ret
 
-%macro op_sub_rax 2
-    mov rax, %1,
-    sub rax, %2
-%endmacro
+_op_sub:
+	; subtracts rdi - rsi, returns in rax
+    mov rax, rdi
+    sub rax, rsi
+	ret
 
-%macro exit 1
+_exit:
+	; exit code in rdi
     mov rax, SYS_EXIT
-    mov rdi, %1
     syscall
-%endmacro
+	ret
 
-%macro print_str 1
-    mov rsi, %1
-    mov rax, %1
-	mov rbx, 0
-    call _print_str
-%endmacro
+_print_char:
+	mov rsi, rdi ; rdi contains a char*
+	mov rax, SYS_WRITE
+	mov rdi, STD_OUT
+	mov rdx, 1 ; number of bytes to print
+	syscall
+	ret
 
 _print_str:
+	mov rsi, rdi ; rdi contains a char*
+    mov rax, rdi
+	mov rbx, 0
+_print_str_loop:
 	inc rax
 	inc rbx
 	mov cl, [rax]
 	cmp cl, 0
-	jne _print_str
+	jne _print_str_loop
 
 	mov rax, SYS_WRITE
-	mov rdi, STDOUT
+	mov rdi, STD_OUT
 	mov rdx, rbx
 	syscall
     ret
 
-%macro print_int 1
-    mov rax, %1
-    call _print_int
-%endmacro
-
 _print_int:
+    mov rax, rdi ; rdi contains a char*
 	mov rcx, digitSpace ; rcx now points to the starting address of digitSpace
 	mov [rcx], byte 0 ; any time there are square brackets around a register that contains a pointer,
     ;              		we're setting the value of the variable. digitSpace[0] = '\0';
@@ -78,44 +83,30 @@ _print_int_loop:
 	cmp rax, 0 ; compare the quotient to 0
 	jne _print_int_loop ; if it is not equal to zero, continue the loop
 _print_int_loop2: ; loop to print values to the screen
-	print_str digitSpace
-    ;print_str [digitSpacePos];
+    mov rdi, [digitSpacePos]
+	call _print_char
 
-	;mov rcx, [digitSpacePos] ; move the value of |0x005| to the rcx. 
-	;dec rcx ; decrement 0x005 - 1 = 0x004
-	;mov [digitSpacePos], rcx ; store it back to the digitSpacePos. Now it looks like |0x002| -> |0x004|
+	mov rcx, [digitSpacePos] ; rcx now contains a pointer to the current char
+	dec rcx ; decrement the pointer
+	mov [digitSpacePos], rcx ; put it back in digitSpacePos
 
-	;cmp rcx, digitSpace ; compare 0x004 with 800 zero bits
-	;jge _print_int_loop2 ; if rcx greater or equal to 0, then loop it back again
-	; at the and, in the address of |0x000| we have ASCII 10. So end of the loop it will make a new line.
+	cmp rcx, digitSpace
+	jge _print_int_loop2
 	ret
 
 %macro input_str 3
-    mov rsi, %1
+    mov rsi, %1 ; fix this later
     mov rdx, %2
     call _input_str
     mov [%3], rax
 %endmacro
 
 _input_str:
+	; we have to be careful with the order so that things aren't overwritten
+	mov rdx, rsi ; rsi contains the size, now put into rdx
+	mov rsi, rdi ; rdi contains a char*, now put into rsi
     mov rax, SYS_READ
-    mov rdi, STDIN
+    mov rdi, STD_IN
     syscall
+	; rax contains the number of bytes that were read
     ret
-
-SYS_WRITE equ 1 ;for OSX 64bit Intel machines 0x2000004
-STD_OUT equ 1
-
-%macro s_exit 0
-	mov rax, 60
-	mov rdi, 0
-	syscall
-%endmacro
-
-%macro simpleWrite 0
-	mov rax, SYS_WRITE
-	mov rdi, STD_OUT
-	mov rsi, rcx ; the address of string to output, in this case it is 0x005 and it contains value of |00000000|
-	mov rdx, 1 ; number of bytes to be printed
-	syscall ; write it in to screen
-%endmacro

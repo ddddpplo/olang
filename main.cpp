@@ -13,21 +13,32 @@ enum TokenType {
 struct Token {
     std::string value;
     TokenType type;
-    //std::vector<Token> children;
+};
+
+struct Instruction {
+    std::string opcode;
+    std::vector<std::string> operands;
+};
+
+struct Label {
+    std::string name;
+    std::vector<Instruction> code;
 };
 
 const std::vector<std::string> OPERATORS = {"=", "+", "-", "*", "/", "**", "(", ")", ",", ";"};
+const std::vector<std::string> INT_REGS = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
+const std::vector<std::string> FLOAT_REGS = {"xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7"};
 
 std::vector<Token> tokenize(const std::string& source);
-std::vector<std::string> parse(const std::vector<Token>& tokens);
 void shuntingYard(std::vector<Token>& infix);
 int getPrecedence(std::string _operator);
-
+std::vector<Label> parse(const std::vector<Token>& tokens);
+std::string convertToAsm(std::vector<Label>);
 
 int main(int argc, char* argv[]) {
     if (argc != 2) {
-        std::cerr << "Error: Incorrect number of arguments" << std::endl;
-        std::cerr << "Expected 1 argument: input file" << std::endl;
+        std::cerr << "[olang] Error: Incorrect number of arguments" << std::endl;
+        std::cerr << "[olang] Expected 1 argument: input file" << std::endl;
         return 1;
     }
     std::string inputFilename = argv[1];
@@ -39,7 +50,8 @@ int main(int argc, char* argv[]) {
 
     std::vector<Token> tokens = tokenize(source);
     shuntingYard(tokens);
-    /*std::vector<std::string> assembly = parse(tokens);
+    std::vector<Label> parsedCode = parse(tokens);
+    std::string assembly = convertToAsm(parsedCode);
 
     std::string programName;
     if (inputFilename.find_last_of(".") != std::string::npos) {
@@ -50,17 +62,14 @@ int main(int argc, char* argv[]) {
     }
 
     std::ofstream outputFile;
-    outputFile.open(programName + ".asm");
-    for (std::string& line : assembly) {
-        outputFile << line << '\n';
-    }
-    outputFile.close();*/
+    outputFile << assembly;
+    outputFile.close();
 
     for (Token token : tokens) {
         std::cout << token.type << "\t'" << token.value << "'\n";
     }
-    //system(("nasm -felf64 " + programName + ".asm").c_str());
-    //system(("ld " + programName + ".o -o " + programName).c_str());
+    system(("nasm -felf64 " + programName + ".asm").c_str());
+    system(("ld " + programName + ".o -o " + programName).c_str());
 
     return 0;
 }
@@ -68,7 +77,6 @@ int main(int argc, char* argv[]) {
 std::vector<Token> tokenize(const std::string& source) {
     std::vector<Token> tokens;
     for (int i = 0; i < source.size(); i++) {
-        //char c = source[i];
         std::string buffer;
         if (isalpha(source[i])) {
             while (isalnum(source[i])) {
@@ -113,25 +121,6 @@ std::vector<Token> tokenize(const std::string& source) {
         }
     }
     return tokens;
-}
-
-std::vector<std::string> parse(const std::vector<Token>& tokens) {
-    std::vector<std::string> assembly;
-    assembly.push_back("global _start");
-    assembly.push_back("_start:");
-    for (int i = 0; i < tokens.size(); i++) {
-        if (tokens[i].type == TokenType::KEYWORD) {
-            /*
-            mov rax, 60 ; 60 is the syscall number for 'exit'
-            mov rdi, 43 ; this is arg0 or in this case, the exit code
-            syscall
-            */
-            assembly.push_back("\tmov rax, 60");
-            assembly.push_back("\tmov rdi, " + tokens[i + 1].value);
-            assembly.push_back("\tsyscall");
-        }
-    }
-    return assembly;
 }
 
 void shuntingYard(std::vector<Token>& infix) {
@@ -197,4 +186,67 @@ void shuntingYard(std::vector<Token>& infix) {
 
 int getPrecedence(std::string _operator) {
     return std::distance(OPERATORS.begin(), std::find(OPERATORS.begin(), OPERATORS.end(), _operator));
+}
+
+/*
+foo(5, 2 + 4, 8 - 1)
+5 2 3 + 8 1 - foo
+addition has 2 arguments, so it puts those in the first 2 function call registers
+it returns its value in rax
+the next thing to do is foo, which takes 
+*/
+std::vector<Label> parse(const std::vector<Token>& tokens) {
+    Label start = {"_start", {}};
+    for (int i = 0; i < tokens.size(); i++) {
+        if (tokens[i].type == TokenType::INT_LIT) {
+            start.code.push_back({"push", {tokens[i].value}});
+        }
+        if (tokens[i].type == TokenType::KEYWORD) {
+            if (tokens[i].value == "exit") {
+                start.code.push_back({"pop", {"rdi"}});
+                start.code.push_back({"call", {"_exit"}});
+            }
+            if (tokens[i].value == "print") {
+                start.code.push_back({"pop", {"rdi"}});
+                start.code.push_back({"call", {"_print_int"}});
+                start.code.push_back({"mov", {"rdi", "endl"}});
+                start.code.push_back({"call", {"_print_char"}});
+            }
+        }
+        if (tokens[i].type == TokenType::OPERATOR) {
+            start.code.push_back({"pop", {"rsi"}});
+            start.code.push_back({"pop", {"rdi"}});
+            
+            if (tokens[i].value == "+")
+                start.code.push_back({"call", {"_op_add"}});
+            if (tokens[i].value == "-")
+                start.code.push_back({"call", {"_op_sub"}});
+            if (tokens[i].value == "=")
+                start.code.push_back({}); // we doin' variables now just kidding no we ain't
+
+            start.code.push_back({"push", {"rax"}});
+        }
+    }
+    return {start};
+}
+
+std::string convertToAsm(std::vector<Label> labels) {
+    std::string assembly;
+    assembly += "%include \"utility.asm\"\n";
+    assembly += "section .text\n";
+    assembly += "\tglobal _start\n";
+    for (const Label& label : labels) {
+        assembly += label.name + ":\n";
+        for (int i = 0; i < label.code.size(); i++) {
+            std::string line = "\t" + label.code[i].opcode;
+            for (int j = 0; j < label.code[i].operands.size(); j++) {
+                line += " " + label.code[i].operands[j];
+                if (label.code[i].operands.size() > 1 && j != label.code[i].operands.size() - 1) {
+                    line += ",";
+                }
+            }
+            assembly += line + '\n';
+        }
+    }
+    return assembly;
 }
