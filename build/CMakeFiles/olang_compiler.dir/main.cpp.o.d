@@ -1,5 +1,5 @@
 CMakeFiles/olang_compiler.dir/main.cpp.o: \
- /home/mostlydaniel/Code/olang/main.cpp /usr/include/stdc-predef.h \
+ /home/daniel/Code/olang/main.cpp /usr/include/stdc-predef.h \
  /usr/include/c++/13/iostream /usr/include/c++/13/bits/requires_hosted.h \
  /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h \
  /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h \

@@ -6,8 +6,10 @@
 
 enum TokenType {
     INT_LIT,
+    STRING,
     OPERATOR,
-    KEYWORD
+    KEYWORD,
+    IDENTIFIER,
 };
 
 struct Token {
@@ -61,7 +63,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    std::ofstream outputFile;
+    std::ofstream outputFile(programName + ".asm");
     outputFile << assembly;
     outputFile.close();
 
@@ -94,6 +96,15 @@ std::vector<Token> tokenize(const std::string& source) {
             }
             i--;
             tokens.push_back(Token{buffer, TokenType::INT_LIT});
+            buffer.clear();
+        }
+        if (source[i] == '"') {
+            i++;
+            while (source[i] != '"') {
+                buffer += source[i];
+                i++;
+            }
+            tokens.push_back(Token{buffer, TokenType::STRING});
             buffer.clear();
         }
         std::vector<int> matched_operators;
@@ -130,6 +141,9 @@ void shuntingYard(std::vector<Token>& infix) {
     for (Token token : infix) {
         // Push any integer literals and variables to the output
         if (token.type == TokenType::INT_LIT) {
+            output.push_back(token);
+        }
+        if (token.type == TokenType::STRING) {
             output.push_back(token);
         }
         else if (token.type == TokenType::OPERATOR || token.type == TokenType::KEYWORD) {
@@ -196,7 +210,10 @@ it returns its value in rax
 the next thing to do is foo, which takes 
 */
 std::vector<Label> parse(const std::vector<Token>& tokens) {
-    Label start = {"_start", {}};
+    Label data = {"section .data", {}};
+    Label text = {"section .text", {}};
+    text.code.push_back({"global", {"_start"}});
+    Label start = {"_start:", {}};
     for (int i = 0; i < tokens.size(); i++) {
         if (tokens[i].type == TokenType::INT_LIT) {
             start.code.push_back({"push", {tokens[i].value}});
@@ -214,29 +231,39 @@ std::vector<Label> parse(const std::vector<Token>& tokens) {
             }
         }
         if (tokens[i].type == TokenType::OPERATOR) {
-            start.code.push_back({"pop", {"rsi"}});
-            start.code.push_back({"pop", {"rdi"}});
-            
-            if (tokens[i].value == "+")
+            if (tokens[i].value == "+") {
+                start.code.push_back({"pop", {"rsi"}});
+                start.code.push_back({"pop", {"rdi"}});
                 start.code.push_back({"call", {"_op_add"}});
-            if (tokens[i].value == "-")
+                start.code.push_back({"push", {"rax"}});
+                
+            }
+            if (tokens[i].value == "-") {
+                start.code.push_back({"pop", {"rsi"}});
+                start.code.push_back({"pop", {"rdi"}});
                 start.code.push_back({"call", {"_op_sub"}});
-            if (tokens[i].value == "=")
-                start.code.push_back({}); // we doin' variables now just kidding no we ain't
-
-            start.code.push_back({"push", {"rax"}});
+                start.code.push_back({"push", {"rax"}});
+            }
+            if (tokens[i].value == "=") {
+                if (tokens[i - 2].type == TokenType::KEYWORD) {
+                    if (tokens[i - 1].type == TokenType::INT_LIT) {
+                        data.code.push_back({tokens[i - 2].value + " db " + tokens[i - 1].value});
+                    }
+                    if (tokens[i - 1].type == TokenType::STRING) {
+                        data.code.push_back({tokens[i - 2].value + " db \"" + tokens[i - 1].value + "\", 0"});
+                    }
+                }
+            }
         }
     }
-    return {start};
+    return {data, text, start};
 }
 
 std::string convertToAsm(std::vector<Label> labels) {
     std::string assembly;
     assembly += "%include \"utility.asm\"\n";
-    assembly += "section .text\n";
-    assembly += "\tglobal _start\n";
     for (const Label& label : labels) {
-        assembly += label.name + ":\n";
+        assembly += label.name + '\n';
         for (int i = 0; i < label.code.size(); i++) {
             std::string line = "\t" + label.code[i].opcode;
             for (int j = 0; j < label.code[i].operands.size(); j++) {
